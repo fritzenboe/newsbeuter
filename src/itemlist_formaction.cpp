@@ -98,6 +98,11 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 				LOG(LOG_INFO, "itemlist_formaction: opening item at pos `%s'", itemposname.c_str());
 				if (itemposname.length() > 0 && visible_items.size() != 0) {
 					if (itempos < visible_items.size()) {
+						try {
+								visible_items[itempos].first->set_unread(false);
+						} catch (const dbexception& e) {
+								v->set_status(utils::strprintf(_("Error when setting article to unread when opening in browser: %s"), e.what()));
+						}
 						v->open_in_browser(visible_items[itempos].first->link());
 						do_redraw = true;
 					}
