@@ -17,9 +17,13 @@ help_formaction::help_formaction(view * vv, std::string formstr)
 help_formaction::~help_formaction() { }
 
 void help_formaction::process_operation(operation op, bool /* automatic */, std::vector<std::string> * /* args */) {
+	bool hardquit = false;
 	switch (op) {
 		case OP_QUIT:
 			quit = true;
+			break;
+		case OP_HARDQUIT:
+			hardquit = true;
 			break;
 		case OP_SEARCH: {
 				std::vector<qna_pair> qna;
@@ -34,7 +38,11 @@ void help_formaction::process_operation(operation op, bool /* automatic */, std:
 		default:
 			break;
 	}
-	if (quit) {
+	if (hardquit) {
+		while (v->formaction_stack_size() > 0) {
+			v->pop_current_formaction();
+		}
+	} else if (quit) {
 		v->pop_current_formaction();
 	}
 }
@@ -88,8 +96,12 @@ void help_formaction::prepare() {
 						strcasestr(it->desc.c_str(), searchphrase.c_str())!=NULL) {
 					char tabs_1[] = "                ";
 					char tabs_2[] = "                        ";
-					unsigned int how_often_1 = strlen(tabs_1) - it->key.length();
-					unsigned int how_often_2 = strlen(tabs_2) - it->cmd.length();
+					int how_often_1 = strlen(tabs_1) - it->key.length();
+					int how_often_2 = strlen(tabs_2) - it->cmd.length();
+					if (how_often_1 <= 0)
+						how_often_1 = 1;
+					if (how_often_2 <= 0)
+						how_often_2 = 1;
 					tabs_1[how_often_1] = '\0';
 					tabs_2[how_often_2] = '\0';
 					std::string line;

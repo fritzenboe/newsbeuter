@@ -1,6 +1,29 @@
 Changes for newsbeuter:
 
-2.1:
+2.4:
+	Added support for query feeds in combination with Google Reader support.
+	Added ability to configure proxy authentication method.
+	Added commandline option -q to enable quiet startup (patch by Isaac Good)
+	Re-sort feed list after all feeds have been reloaded.
+
+2.3 (2010-06-24):
+	Fixed HTML rendering of bold and underline text when light background is configured.
+	Fixed issues #192, #194, #197, #198, #199, #200, #201, #202, #210, #216.
+	Made newsbeuter silent on lockfile errors when '-x' option is used.
+	Fixed Google Reader authentication (by Seth Mason)
+
+2.2 (2010-03-14):
+	Added Google Reader support.
+	Fixed issues #90, #160, #161, #168, #169, #171, #179, #180, #184.
+	Implemented article highlighting in article list based on the article content (fixes issue #174).
+	Extended "ignore article" functionality with different ignore modes (download/display; fixes issue #52).
+	Added "hard quit" key to immediately quit from newsbeuter (patch by Jim Pryor)
+	Added "download status" format specifier for feedlist-format (fixes issue #181).
+	Added HTML table renderer (patch by Stefan Erben)
+	Fixed issues #183, #188 (patch by Stefan Erben)
+	Added "open-in-browser-and-mark-read" key (patch by Isaac Good)
+
+2.1 (2009-12-08):
 	Added support for dc:creator tag for RSS 2.0 parser.
 	Fixed issue #141 (podbeuter ignored use-proxy configuration command).
 	When entering a feed, the first unread article is automatically selected (can be turned off with goto-first-unread no).

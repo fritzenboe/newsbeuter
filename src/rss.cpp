@@ -22,7 +22,7 @@
 
 namespace newsbeuter {
 
-rss_item::rss_item(cache * c) : unread_(true), ch(c), enqueued_(false), deleted_(0), idx(0) {
+rss_item::rss_item(cache * c) : unread_(true), ch(c), enqueued_(false), deleted_(0), idx(0), override_unread_(false) {
 	// LOG(LOG_CRITICAL, "new rss_item");
 }
 
@@ -30,7 +30,7 @@ rss_item::~rss_item() {
 	// LOG(LOG_CRITICAL, "delete rss_item");
 }
 
-rss_feed::rss_feed(cache * c) : ch(c), empty(true), is_rtl_(false), idx(0) {
+rss_feed::rss_feed(cache * c) : ch(c), empty(true), is_rtl_(false), idx(0), status_(SUCCESS) {
 	// LOG(LOG_CRITICAL, "new rss_feed");
 }
 
@@ -273,6 +273,12 @@ void rss_item::update_flags() {
 	}
 }
 
+void rss_item::set_flags(const std::string& ff) {
+	oldflags_ = flags_;
+	flags_ = ff;
+	sort_flags();
+}
+
 void rss_item::sort_flags() {
 	std::sort(flags_.begin(), flags_.end());
 
@@ -406,7 +412,7 @@ bool rss_ignores::matches_resetunread(const std::string& url) {
 	return false;
 }
 
-void rss_feed::update_items(std::vector<std::tr1::shared_ptr<rss_feed> >& feeds) {
+void rss_feed::update_items(std::vector<std::tr1::shared_ptr<rss_feed> > feeds) {
 	scope_mutex lock(&item_mutex);
 	if (query.length() == 0)
 		return;
@@ -448,6 +454,9 @@ void rss_feed::set_rssurl(const std::string& u) {
 	rssurl_ = u;
 	if (rssurl_.substr(0,6) == "query:") {
 		std::vector<std::string> tokens = utils::tokenize_quoted(u, ":");
+		if (tokens.size() < 3) {
+			throw std::string(_("too few arguments"));
+		}
 		LOG(LOG_DEBUG, "rss_feed::set_rssurl: query name = `%s' expr = `%s'", tokens[1].c_str(), tokens[2].c_str());
 		set_title(tokens[1]);
 		set_query(tokens[2]);
@@ -455,44 +464,50 @@ void rss_feed::set_rssurl(const std::string& u) {
 }
 
 struct sort_item_by_title : public std::binary_function<std::tr1::shared_ptr<rss_item>, std::tr1::shared_ptr<rss_item>, bool> {
-	sort_item_by_title() { }
+	bool reverse;
+	sort_item_by_title(bool b) : reverse(b) { }
 	bool operator()(std::tr1::shared_ptr<rss_item> a, std::tr1::shared_ptr<rss_item> b) {
-		return strcasecmp(a->title().c_str(), b->title().c_str()) < 0;
+		return reverse ?  (strcasecmp(a->title().c_str(), b->title().c_str()) > 0) : (strcasecmp(a->title().c_str(), b->title().c_str()) < 0);
 	}
 };
 
 struct sort_item_by_flags : public std::binary_function<std::tr1::shared_ptr<rss_item>, std::tr1::shared_ptr<rss_item>, bool> {
-	sort_item_by_flags() { }
+	bool reverse;
+	sort_item_by_flags(bool b) : reverse(b) { }
 	bool operator()(std::tr1::shared_ptr<rss_item> a, std::tr1::shared_ptr<rss_item> b) {
-		return strcmp(a->flags().c_str(), b->flags().c_str()) < 0;
+		return reverse ?  (strcmp(a->flags().c_str(), b->flags().c_str()) > 0) : (strcmp(a->flags().c_str(), b->flags().c_str()) < 0);
 	}
 };
 
 struct sort_item_by_author : public std::binary_function<std::tr1::shared_ptr<rss_item>, std::tr1::shared_ptr<rss_item>, bool> {
-	sort_item_by_author() { }
+	bool reverse;
+	sort_item_by_author(bool b) : reverse(b) { }
 	bool operator()(std::tr1::shared_ptr<rss_item> a, std::tr1::shared_ptr<rss_item> b) {
-		return strcmp(a->author().c_str(), b->author().c_str()) < 0;
+		return reverse ?  (strcmp(a->author().c_str(), b->author().c_str()) > 0) : (strcmp(a->author().c_str(), b->author().c_str()) < 0);
 	}
 };
 
 struct sort_item_by_link : public std::binary_function<std::tr1::shared_ptr<rss_item>, std::tr1::shared_ptr<rss_item>, bool> {
-	sort_item_by_link() { }
+	bool reverse;
+	sort_item_by_link(bool b) : reverse(b) { }
 	bool operator()(std::tr1::shared_ptr<rss_item> a, std::tr1::shared_ptr<rss_item> b) {
-		return strcmp(a->link().c_str(), b->link().c_str()) < 0;
+		return reverse ?  (strcmp(a->link().c_str(), b->link().c_str()) >  0) : (strcmp(a->link().c_str(), b->link().c_str()) < 0);
 	}
 };
 
 struct sort_item_by_guid : public std::binary_function<std::tr1::shared_ptr<rss_item>, std::tr1::shared_ptr<rss_item>, bool> {
-	sort_item_by_guid() { }
+	bool reverse;
+	sort_item_by_guid(bool b) : reverse(b) { }
 	bool operator()(std::tr1::shared_ptr<rss_item> a, std::tr1::shared_ptr<rss_item> b) {
-		return strcmp(a->guid().c_str(), b->guid().c_str()) < 0;
+		return reverse ?  (strcmp(a->guid().c_str(), b->guid().c_str()) > 0) : (strcmp(a->guid().c_str(), b->guid().c_str()) < 0);
 	}
 };
 
 struct sort_item_by_date : public std::binary_function<std::tr1::shared_ptr<rss_item>, std::tr1::shared_ptr<rss_item>, bool> {
-	sort_item_by_date() { }
+	bool reverse;
+	sort_item_by_date(bool b) : reverse(b) { }
 	bool operator()(std::tr1::shared_ptr<rss_item> a, std::tr1::shared_ptr<rss_item> b) {
-		return a->pubDate_timestamp()  < b->pubDate_timestamp();
+		return reverse ?  (a->pubDate_timestamp() > b->pubDate_timestamp()) : (a->pubDate_timestamp() < b->pubDate_timestamp());
 	}
 };
 
@@ -517,22 +532,18 @@ void rss_feed::sort_unlocked(const std::string& method) {
 
 	if (methods.size() > 0) {
 		if (methods[0] == "title") {
-			std::stable_sort(items_.begin(), items_.end(), sort_item_by_title());
+			std::stable_sort(items_.begin(), items_.end(), sort_item_by_title(reverse));
 		} else if (methods[0] == "flags") {
-			std::stable_sort(items_.begin(), items_.end(), sort_item_by_flags());
+			std::stable_sort(items_.begin(), items_.end(), sort_item_by_flags(reverse));
 		} else if (methods[0] == "author") {
-			std::stable_sort(items_.begin(), items_.end(), sort_item_by_author());
+			std::stable_sort(items_.begin(), items_.end(), sort_item_by_author(reverse));
 		} else if (methods[0] == "link") {
-			std::stable_sort(items_.begin(), items_.end(), sort_item_by_link());
+			std::stable_sort(items_.begin(), items_.end(), sort_item_by_link(reverse));
 		} else if (methods[0] == "guid") {
-			std::stable_sort(items_.begin(), items_.end(), sort_item_by_guid());
+			std::stable_sort(items_.begin(), items_.end(), sort_item_by_guid(reverse));
 		} else if (methods[0] == "date") {
-			std::stable_sort(items_.begin(), items_.end(), sort_item_by_date());
+			std::stable_sort(items_.begin(), items_.end(), sort_item_by_date(reverse));
 		}
-	}
-
-	if (reverse) {
-		std::reverse(items_.begin(), items_.end());
 	}
 }
 
@@ -568,6 +579,16 @@ void rss_feed::set_feedptrs(std::tr1::shared_ptr<rss_feed> self) {
 
 void rss_item::set_feedptr(std::tr1::shared_ptr<rss_feed> ptr) {
 	feedptr = ptr;
+}
+
+std::string rss_feed::get_status() {
+	switch (status_) {
+		case SUCCESS: return " ";
+		case TO_BE_DOWNLOADED: return "_";
+		case DURING_DOWNLOAD: return ".";
+		case DL_ERROR: return "x";
+		default: return "?";
+	}
 }
 
 

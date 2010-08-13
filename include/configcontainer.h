@@ -9,11 +9,13 @@ namespace newsbeuter
 
 struct configdata
 {
-	enum configdata_type { INVALID, BOOL, INT, STR, PATH };
+	enum configdata_type { INVALID, BOOL, INT, STR, PATH, ALIAS, ENUM };
 	configdata(const std::string& v = "", configdata_type t = INVALID, bool m = false) : value(v), default_value(v), type(t), multi_option(m) { }
+	configdata(const std::string& v, ...);
 	std::string value;
 	std::string default_value;
 	configdata_type type;
+	std::set<std::string> enum_values;
 	bool multi_option;
 };
 
@@ -38,6 +40,7 @@ private:
 	
 	bool is_bool(const std::string& s);
 	bool is_int(const std::string& s);
+	std::string lookup_alias(const std::string& s);
 };
 
 }

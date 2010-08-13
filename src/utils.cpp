@@ -261,7 +261,7 @@ std::string utils::convert_text(const std::string& text, const std::string& toco
  * of all the Unix-like systems around there, only Linux/glibc seems to 
  * come with a SuSv3-conforming iconv implementation.
  */
-#if !(__linux) && !defined(__GLIBC__)
+#if !(__linux) && !defined(__GLIBC__) && !defined(__APPLE__)
 	const char * inbufp;
 #else
 	char * inbufp;
@@ -469,8 +469,9 @@ std::wstring utils::str2wstr(const std::string& str) {
 }
 
 std::string utils::wstr2str(const std::wstring& wstr) {
-	const char * codeset = nl_langinfo(CODESET);
-	struct stfl_ipool * ipool = stfl_ipool_create(codeset);
+	std::string codeset = nl_langinfo(CODESET);
+	codeset.append("//TRANSLIT");
+	struct stfl_ipool * ipool = stfl_ipool_create(codeset.c_str());
 	std::string result = stfl_ipool_fromwc(ipool, wstr.c_str());
 	stfl_ipool_destroy(ipool);
 	return result;
@@ -608,6 +609,42 @@ size_t utils::strwidth(const std::string& str) {
 	return width; // exact width
 }
 
+size_t utils::strwidth_stfl(const std::string& str) {
+	size_t reduce_count = 0;
+	size_t len = str.length();
+	if (len > 1) {
+		for (size_t idx=0;idx<len-1;++idx) {
+			if (str[idx] == '<' && str[idx+1] != '>') {
+				reduce_count += 3;
+				idx += 3;
+			}
+		}
+	}
+
+	return strwidth(str) - reduce_count;
+}
+
+size_t utils::wcswidth_stfl(const std::wstring& str, size_t size) {
+	size_t reduce_count = 0;
+	size_t len = std::min(str.length(), size);
+	if (len > 1) {
+		for (size_t idx=0;idx<len-1;++idx) {
+			if (str[idx] == L'<' && str[idx+1] != L'>') {
+				reduce_count += 3;
+				idx += 3;
+			}
+		}
+	}
+
+	int width = wcswidth(str.c_str(), size);
+	if (width < 0) {
+		LOG(LOG_ERROR, "oh, oh, wcswidth just failed"); // : %ls", str.c_str());
+		return str.length() - reduce_count;
+	}
+
+	return width - reduce_count;
+}
+
 std::string utils::join(const std::vector<std::string>& strings, const std::string& separator) {
 	std::string result;
 
@@ -711,15 +748,16 @@ std::string utils::quote_if_necessary(const std::string& str) {
 void utils::set_common_curl_options(CURL * handle, configcontainer * cfg) {
 	std::string proxy;
 	std::string proxyauth;
+	std::string proxyauthmethod;
 	std::string proxytype;
 	std::string useragent; 
 	unsigned int dl_timeout = 0;
-
 
 	if (cfg) {
 		if (cfg->get_configvalue_as_bool("use-proxy")) {
 			proxy = cfg->get_configvalue("proxy");
 			proxyauth = cfg->get_configvalue("proxy-auth");
+			proxyauthmethod = cfg->get_configvalue("proxy-auth-method");
 			proxytype = cfg->get_configvalue("proxy-type");
 		}
 		useragent = utils::get_useragent(cfg);
@@ -733,8 +771,10 @@ void utils::set_common_curl_options(CURL * handle, configcontainer * cfg) {
 
 	if (proxy != "")
 		curl_easy_setopt(handle, CURLOPT_PROXY, proxy.c_str());
-	if (proxyauth != "")
+	if (proxyauth != "") {
+		curl_easy_setopt(handle, CURLOPT_PROXYAUTH, get_proxy_auth_method(proxyauthmethod));
 		curl_easy_setopt(handle, CURLOPT_PROXYUSERPWD, proxyauth.c_str());
+	}
 	if (proxytype != "") {
 		LOG(LOG_DEBUG, "utils::set_common_curl_options: proxytype = %s", proxytype.c_str());
 		curl_easy_setopt(handle, CURLOPT_PROXYTYPE, get_proxy_type(proxytype));
@@ -747,6 +787,59 @@ void utils::set_common_curl_options(CURL * handle, configcontainer * cfg) {
 	curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1);
 }
 
+std::string utils::get_content(xmlNode * node) {
+	std::string retval;
+	if (node) {
+		xmlChar * content = xmlNodeGetContent(node);
+		if (content) {
+			retval = (const char *)content;
+			xmlFree(content);
+		}
+	}
+	return retval;
+}
+
+std::string utils::get_prop(xmlNode * node, const char * prop, const char * ns) {
+	std::string retval;
+	if (node) {
+		xmlChar * value;
+		if (ns)
+			value = xmlGetProp(node, (xmlChar *)prop);
+		else
+			value = xmlGetNsProp(node, (xmlChar *)prop, (xmlChar *)ns);
+		if (value) {
+			retval = (const char*)value;
+			xmlFree(value);
+		}
+	}
+	return retval;
+}
+
+int utils::get_proxy_auth_method(const std::string& type) {
+	if (type == "any")
+		return CURLAUTH_ANY;
+	if (type == "basic")
+		return CURLAUTH_BASIC;
+	if (type == "digest")
+		return CURLAUTH_DIGEST;
+#ifdef CURLAUTH_DIGEST_IE
+	if (type == "digest_ie")
+		return CURLAUTH_DIGEST_IE;
+#else
+# warning "proxy-auth-method digest_ie not added due to libcurl older than 7.19.3"
+#endif
+	if (type == "gssnegotiate")
+		return CURLAUTH_GSSNEGOTIATE;
+	if (type == "ntlm")
+		return CURLAUTH_NTLM;
+	if (type == "anysafe")
+		return CURLAUTH_ANYSAFE;
+	if (type != "") {
+		LOG(LOG_USERERROR, "you configured an invalid proxy authentication method: %s", type.c_str());
+	}
+	return CURLAUTH_ANY;
+}
+
 curl_proxytype utils::get_proxy_type(const std::string& type) {
 	if (type == "http")
 		return CURLPROXY_HTTP;
@@ -754,11 +847,31 @@ curl_proxytype utils::get_proxy_type(const std::string& type) {
 		return CURLPROXY_SOCKS4;
 	if (type == "socks5")
 		return CURLPROXY_SOCKS5;
+#ifdef CURLPROXY_SOCKS4A
 	if (type == "socks4a")
 		return CURLPROXY_SOCKS4A;
+#endif
 
-	LOG(LOG_USERERROR, "you configured an invalid proxy type: %s", type.c_str());
+	if (type != "") {
+		LOG(LOG_USERERROR, "you configured an invalid proxy type: %s", type.c_str());
+	}
 	return CURLPROXY_HTTP;
+}
+
+std::string utils::escape_url(const std::string& url) {
+	return replace_all(replace_all(url,"?","%3F"), "&", "%26");
+}
+
+std::string utils::unescape_url(const std::string& url) {
+	return replace_all(replace_all(url,"%3F","?"), "%26", "&");
+}
+
+std::wstring utils::clean_nonprintable_characters(std::wstring text) {
+	for (size_t idx=0;idx<text.size();++idx) {
+		if (!iswprint(text[idx]))
+			text[idx] = L'\uFFFD';
+	}
+	return text;
 }
 
 }

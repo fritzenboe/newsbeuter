@@ -34,6 +34,7 @@ namespace newsbeuter {
 						// general and newsbeuter-specific operations:
 						OP_NB_MIN,
 						OP_QUIT, 
+						OP_HARDQUIT, 
 						OP_RELOAD, 
 						OP_RELOADALL, 
 						OP_MARKFEEDREAD, 
@@ -43,6 +44,7 @@ namespace newsbeuter {
 						OP_NEXTUNREAD, 
 						OP_PREVUNREAD,
 						OP_OPENINBROWSER, 
+						OP_OPENBROWSER_AND_MARK,
 						OP_HELP, 
 						OP_TOGGLESOURCEVIEW, 
 						OP_TOGGLEITEMREAD, 

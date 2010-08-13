@@ -9,15 +9,22 @@ listformatter::listformatter() : refresh_cache(true) { }
 listformatter::~listformatter() { }
 
 void listformatter::add_line(const std::string& text, unsigned int id, unsigned int width) {
-	if (width > 0) {
-		std::string mytext = text;
-		while (mytext.length() > width) {
-			lines.push_back(line_id_pair(mytext.substr(0, width), id));
-			mytext.erase(0, width);
+	if (width > 0 && text.length() > 0) {
+		std::wstring mytext = utils::clean_nonprintable_characters(utils::str2wstr(text));
+
+		while (mytext.length() > 0) {
+			size_t size = mytext.length();
+			size_t w = utils::wcswidth_stfl(mytext, size);
+			if (w > width) {
+				while (size && (w = utils::wcswidth_stfl(mytext, size)) > width) {
+					size--;
+				}
+			}
+			lines.push_back(line_id_pair(utils::wstr2str(mytext.substr(0, size)), id));
+			mytext.erase(0, size);
 		}
-		lines.push_back(line_id_pair(mytext, id));
 	} else {
-		lines.push_back(line_id_pair(text, id));
+		lines.push_back(line_id_pair(utils::wstr2str(utils::clean_nonprintable_characters(utils::str2wstr(text))), id));
 	}
 	LOG(LOG_DEBUG, "listformatter::add_line: `%s'", text.c_str());
 	refresh_cache = true;
@@ -25,7 +32,7 @@ void listformatter::add_line(const std::string& text, unsigned int id, unsigned 
 
 void listformatter::add_lines(const std::vector<std::string>& thelines, unsigned int width) {
 	for (std::vector<std::string>::const_iterator it=thelines.begin();it!=thelines.end();++it) {
-		add_line(*it, UINT_MAX, width);
+		add_line(utils::replace_all(*it, "\t", "        "), UINT_MAX, width);
 	}
 }
 

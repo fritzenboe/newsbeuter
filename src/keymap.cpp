@@ -22,6 +22,7 @@ struct op_desc {
 static op_desc opdescs[] = {
 	{ OP_OPEN,				"open",						"ENTER", _("Open feed/article"),				KM_FEEDLIST | KM_FILEBROWSER | KM_HELP | KM_ARTICLELIST | KM_TAGSELECT | KM_FILTERSELECT | KM_URLVIEW | KM_PODBEUTER | KM_DIALOGS },
 	{ OP_QUIT,				"quit",						"q",	_("Return to previous dialog/Quit"),	KM_FEEDLIST | KM_FILEBROWSER | KM_HELP | KM_ARTICLELIST | KM_ARTICLE | KM_TAGSELECT | KM_FILTERSELECT | KM_URLVIEW | KM_PODBEUTER | KM_DIALOGS },
+	{ OP_HARDQUIT,			"hard-quit",				"Q",	_("Quit program,  no confirmation"),	KM_FEEDLIST | KM_FILEBROWSER | KM_HELP | KM_ARTICLELIST | KM_ARTICLE | KM_TAGSELECT | KM_FILTERSELECT | KM_URLVIEW | KM_PODBEUTER | KM_DIALOGS },
 	{ OP_RELOAD,			"reload",					"r",	_("Reload currently selected feed"),	KM_FEEDLIST }, 
 	{ OP_RELOADALL,			"reload-all",				"R",	_("Reload all feeds"),					KM_FEEDLIST },
 	{ OP_MARKFEEDREAD,		"mark-feed-read",			"A",	_("Mark feed read"),					KM_FEEDLIST | KM_ARTICLELIST },
@@ -30,6 +31,7 @@ static op_desc opdescs[] = {
 	{ OP_NEXTUNREAD,		"next-unread",				"n",	_("Go to next unread article"),			KM_FEEDLIST | KM_ARTICLELIST | KM_ARTICLE },
 	{ OP_PREVUNREAD,		"prev-unread",				"p",	_("Go to previous unread article"),		KM_FEEDLIST | KM_ARTICLELIST | KM_ARTICLE },
 	{ OP_RANDOMUNREAD,		"random-unread",			"^K",	_("Go to a random unread article"),		KM_FEEDLIST | KM_ARTICLELIST | KM_ARTICLE },
+	{ OP_OPENBROWSER_AND_MARK, "open-in-browser-and-mark-read",                   "O",    _("Open article in browser and mark read"),           KM_ARTICLELIST },
 	{ OP_OPENINBROWSER,		"open-in-browser",			"o",	_("Open article in browser"),			KM_FEEDLIST | KM_ARTICLELIST | KM_ARTICLE },
 	{ OP_HELP,				"help",						"?",	_("Open help dialog"),					KM_FEEDLIST | KM_ARTICLELIST | KM_ARTICLE | KM_PODBEUTER },
 	{ OP_TOGGLESOURCEVIEW,	"toggle-source-view",		"^U",	_("Toggle source view"),				KM_ARTICLE },

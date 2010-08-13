@@ -124,7 +124,8 @@ void itemview_formaction::prepare() {
 		if (show_source) {
 			render_source(lines, utils::quote_for_stfl(item->description()), render_width);
 		} else {
-			lines = render_html(item->description(), links, item->feedurl(), render_width);
+			std::string baseurl = item->get_base() != "" ? item->get_base() : item->feedurl();
+			lines = render_html(item->description(), links, baseurl, render_width);
 		}
 
 		listfmt.add_lines(lines, view_width);
@@ -146,6 +147,7 @@ void itemview_formaction::prepare() {
 
 void itemview_formaction::process_operation(operation op, bool automatic, std::vector<std::string> * args) {
 	std::tr1::shared_ptr<rss_item> item = feed->get_item_by_guid(guid);
+	bool hardquit = false;
 
 	/*
 	 * whenever we process an operation, we mark the item
@@ -155,15 +157,16 @@ void itemview_formaction::process_operation(operation op, bool automatic, std::v
 	 * recorded in the database.
 	 */
 	try {
+		bool old_unread = item->unread();
 		item->set_unread(false);
+		if (old_unread) {
+			v->get_ctrl()->mark_article_read(item->guid(), true);
+		}
 	} catch (const dbexception& e) {
 		v->show_error(utils::strprintf(_("Error while marking article as read: %s"), e.what()));
 	}
 
 	switch (op) {
-		case OP_OPEN:
-			// nothing
-			break;
 		case OP_TOGGLESOURCEVIEW:
 			LOG(LOG_INFO, "view::run_itemview: toggling source view");
 			show_source = !show_source;
@@ -302,6 +305,7 @@ void itemview_formaction::process_operation(operation op, bool automatic, std::v
 			v->set_status(_("Toggling read flag for article..."));
 			try {
 				item->set_unread(true);
+				v->get_ctrl()->mark_article_read(item->guid(), false);
 			} catch (const dbexception& e) {
 				v->show_error(utils::strprintf(_("Error while marking article as unread: %s"), e.what()));
 			}
@@ -311,6 +315,10 @@ void itemview_formaction::process_operation(operation op, bool automatic, std::v
 		case OP_QUIT:
 			LOG(LOG_INFO, "view::run_itemview: quitting");
 			quit = true;
+			break;
+		case OP_HARDQUIT:
+			LOG(LOG_INFO, "view::run_itemview: hard quitting");
+			hardquit = true;
 			break;
 		case OP_HELP:
 			v->push_help();
@@ -352,7 +360,11 @@ void itemview_formaction::process_operation(operation op, bool automatic, std::v
 			break;
 	}
 
-	if (quit) {
+	if (hardquit) {
+		while (v->formaction_stack_size() > 0) {
+			v->pop_current_formaction();
+		}
+	} else if (quit) {
 		v->pop_current_formaction();
 	}
 
@@ -361,7 +373,6 @@ void itemview_formaction::process_operation(operation op, bool automatic, std::v
 keymap_hint_entry * itemview_formaction::get_keymap_hint() {
 	static keymap_hint_entry hints[] = {
 		{ OP_QUIT, _("Quit") },
-		{ OP_OPEN, _("Open") },
 		{ OP_SAVE, _("Save") },
 		{ OP_NEXTUNREAD, _("Next Unread") },
 		{ OP_OPENINBROWSER, _("Open in Browser") },
@@ -451,7 +462,7 @@ void itemview_formaction::finished_qna(operation op) {
 	switch (op) {
 		case OP_INT_EDITFLAGS_END:
 			item->set_flags(qna_responses[0]);
-			item->update_flags();
+			v->get_ctrl()->update_flags(item);
 			v->set_status(_("Flags updated."));
 			do_redraw = true;
 			break;
@@ -523,7 +534,7 @@ void itemview_formaction::set_regexmanager(regexmanager * r) {
 	for (std::vector<std::string>::iterator it=attrs.begin();it!=attrs.end();++it,++i) {
 		attrstr.append(utils::strprintf("@style_%u_normal:%s ", i, it->c_str()));
 	}
-	attrstr.append("@style_b_normal:attr=bold @style_u_normal:attr=underline ");
+	attrstr.append("@style_b_normal[color_bold]:attr=bold @style_u_normal[color_underline]:attr=underline ");
 	std::string textview = utils::strprintf("{textview[article] style_normal[article]: style_end[styleend]:fg=blue,attr=bold %s .expand:vh offset[articleoffset]:0 richtext:1}", attrstr.c_str());
 	f->modify("article", "replace", textview);
 }

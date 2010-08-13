@@ -1,4 +1,4 @@
-/* rsspp - Copyright (C) 2008-2009 Andreas Krennmair <ak@newsbeuter.org>
+/* rsspp - Copyright (C) 2008-2010 Andreas Krennmair <ak@newsbeuter.org>
  * Licensed under the MIT/X Consortium License. See file LICENSE
  * for more information.
  */
@@ -17,6 +17,7 @@
 #define ATOM_1_0_URI	"http://www.w3.org/2005/Atom"
 #define MEDIA_RSS_URI	"http://search.yahoo.com/mrss/"
 #define XML_URI			"http://www.w3.org/XML/1998/namespace"
+#define RSS20USERLAND_URI "http://backend.userland.com/rss2"
 
 namespace rsspp {
 
@@ -36,14 +37,17 @@ struct rss_parser {
 
 struct rss_09x_parser : public rss_parser {
 		virtual void parse_feed(feed& f, xmlNode * rootNode);
-		rss_09x_parser(xmlDocPtr doc) : rss_parser(doc) { }
-		virtual ~rss_09x_parser() { }
+		rss_09x_parser(xmlDocPtr doc) : rss_parser(doc), ns(NULL) { }
+		virtual ~rss_09x_parser();
+	protected:
+		const char * ns;
 	private:
 		item parse_item(xmlNode * itemNode);
 };
 
 struct rss_20_parser : public rss_09x_parser {
 	rss_20_parser(xmlDocPtr doc) : rss_09x_parser(doc) { }
+	virtual void parse_feed(feed& f, xmlNode * rootNode);
 	virtual ~rss_20_parser() { }
 };
 
@@ -56,11 +60,12 @@ struct rss_10_parser : public rss_parser {
 
 struct atom_parser : public rss_parser {
 		virtual void parse_feed(feed& f, xmlNode * rootNode);
-		atom_parser(xmlDocPtr doc) : rss_parser(doc) { }
+		atom_parser(xmlDocPtr doc) : rss_parser(doc), ns(0) { }
 		virtual ~atom_parser() { }
 	private:
 		item parse_entry(xmlNode * itemNode);
 		std::string globalbase;
+		const char * ns;
 };
 
 struct rss_parser_factory {

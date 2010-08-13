@@ -16,6 +16,22 @@
 namespace newsbeuter
 {
 
+configdata::configdata(const std::string& v, ...) : value(v), default_value(v), type(ENUM) {
+	va_list ap;
+	va_start(ap, v);
+
+	const char * arg;
+
+	do {
+		arg = va_arg(ap, const char *);
+		if (arg) {
+			enum_values.insert(arg);
+		}
+	} while (arg != NULL);
+
+	va_end(ap);
+}
+
 configcontainer::configcontainer()
 {
 	// create the config options and set their resp. default value and type
@@ -37,6 +53,7 @@ configcontainer::configcontainer()
 	config_data["cache-file"]      = configdata("", configdata::PATH);
 	config_data["proxy"]           = configdata("", configdata::STR);
 	config_data["proxy-auth"]      = configdata("", configdata::STR);
+	config_data["proxy-auth-method"] = configdata("any", "any", "basic", "digest", "digest_ie", "gssnegotiate", "ntlm", "anysafe", NULL);
 	config_data["confirm-exit"]    = configdata("no", configdata::BOOL);
 	config_data["error-log"]       = configdata("", configdata::PATH);
 	config_data["notify-screen"]   = configdata("no", configdata::BOOL);
@@ -46,7 +63,7 @@ configcontainer::configcontainer()
 	config_data["notify-program"]  = configdata("", configdata::PATH);
 	config_data["notify-format"]   = configdata(_("newsbeuter: finished reload, %f unread feeds (%n unread articles total)"), configdata::STR);
 	config_data["datetime-format"] = configdata("%b %d", configdata::STR);
-	config_data["urls-source"]     = configdata("local", configdata::STR);
+	config_data["urls-source"]     = configdata("local", "local", "bloglines", "opml", "googlereader", NULL); // enum
 	config_data["bloglines-auth"]  = configdata("", configdata::STR);
 	config_data["bloglines-mark-read"] = configdata("no", configdata::BOOL);
 	config_data["bookmark-cmd"]    = configdata("", configdata::STR);
@@ -74,7 +91,14 @@ configcontainer::configcontainer()
 	config_data["history-limit"] = configdata("100", configdata::INT);
 	config_data["prepopulate-query-feeds"] = configdata("false", configdata::BOOL);
 	config_data["goto-first-unread"] = configdata("true", configdata::BOOL);
-	config_data["proxy-type"] = configdata("http", configdata::STR);
+	config_data["proxy-type"] = configdata("http", "http", "socks4", "socks4a", "socks5", NULL); // enum
+	config_data["googlereader-login"] = configdata("", configdata::STR);
+	config_data["googlereader-password"] = configdata("", configdata::STR);
+	config_data["googlereader-flag-share"] = configdata("", configdata::STR);
+	config_data["googlereader-flag-star"] = configdata("", configdata::STR);
+	config_data["googlereader-show-special-feeds"] = configdata("true", configdata::BOOL);
+	config_data["googlereader-min-items"] = configdata("20", configdata::INT);
+	config_data["ignore-mode"] = configdata("download", "download", "display", NULL); // enum
 
 	/* title formats: */
 	config_data["feedlist-title-format"] = configdata(_("%N %V - Your feeds (%u unread, %t total)%?T? - tag `%T'&?"), configdata::STR);
@@ -103,7 +127,9 @@ void configcontainer::register_commands(configparser& cfgparser)
 }
 
 void configcontainer::handle_action(const std::string& action, const std::vector<std::string>& params) {
-	configdata& cfgdata = config_data[action];
+	std::string resolved_action = lookup_alias(action);
+
+	configdata& cfgdata = config_data[resolved_action];
 
 	// configdata::INVALID indicates that the action didn't exist, and that the returned object was created ad-hoc.
 	if (cfgdata.type == configdata::INVALID) {
@@ -130,6 +156,10 @@ void configcontainer::handle_action(const std::string& action, const std::vector
 			cfgdata.value = params[0];
 			break;
 
+		case configdata::ENUM:
+			if (cfgdata.enum_values.find(params[0]) == cfgdata.enum_values.end())
+				throw confighandlerexception(utils::strprintf(_("invalid configuration value `%s'"), params[0].c_str()));
+			// fall-through
 		case configdata::STR:
 		case configdata::PATH:
 			if (cfgdata.multi_option)
@@ -153,6 +183,15 @@ bool configcontainer::is_bool(const std::string& s) {
 	return false;
 }
 
+std::string configcontainer::lookup_alias(const std::string& s) {
+	// this assumes that the config_data table is consistent.
+	std::string alias = s;
+	while (alias != "" && config_data[alias].type == configdata::ALIAS) {
+		alias = config_data[alias].default_value;
+	}
+	return alias;
+}
+
 bool configcontainer::is_int(const std::string& s) {
 	const char * s1 = s.c_str();
 	for (;*s1;s1++) {
@@ -163,7 +202,7 @@ bool configcontainer::is_int(const std::string& s) {
 }
 
 std::string configcontainer::get_configvalue(const std::string& key) {
-	std::string retval = config_data[key].value;
+	std::string retval = config_data[lookup_alias(key)].value;
 	if (config_data[key].type == configdata::PATH) {
 		retval = utils::resolve_tilde(retval);
 	}
@@ -172,30 +211,33 @@ std::string configcontainer::get_configvalue(const std::string& key) {
 }
 
 int configcontainer::get_configvalue_as_int(const std::string& key) {
-	std::istringstream is(config_data[key].value);
+	std::istringstream is(config_data[lookup_alias(key)].value);
 	int i;
 	is >> i;
 	return i;
 }
 
 bool configcontainer::get_configvalue_as_bool(const std::string& key) {
-	if (config_data[key].value == "true" || config_data[key].value == "yes")
+	std::string value = config_data[lookup_alias(key)].value;
+	if (value == "true" || value == "yes")
 		return true;
 	return false;
 }
 
 void configcontainer::set_configvalue(const std::string& key, const std::string& value) {
-	LOG(LOG_DEBUG,"configcontainer::set_configvalue(%s,%s) called", key.c_str(), value.c_str());
-	config_data[key].value = value;
+	LOG(LOG_DEBUG,"configcontainer::set_configvalue(%s [resolved: %s],%s) called", key.c_str(), lookup_alias(key).c_str(), value.c_str());
+	config_data[lookup_alias(key)].value = value;
 }
 
 void configcontainer::reset_to_default(const std::string& key) {
-	config_data[key].value = config_data[key].default_value;
+	std::string resolved_key = lookup_alias(key);
+	config_data[resolved_key].value = config_data[resolved_key].default_value;
 }
 
 void configcontainer::toggle(const std::string& key) {
-	if (config_data[key].type == configdata::BOOL) {
-		set_configvalue(key, std::string(get_configvalue_as_bool(key) ? "false" : "true"));
+	std::string resolved_key = lookup_alias(key);
+	if (config_data[resolved_key].type == configdata::BOOL) {
+		set_configvalue(resolved_key, std::string(get_configvalue_as_bool(resolved_key) ? "false" : "true"));
 	}
 }
 
@@ -210,6 +252,7 @@ void configcontainer::dump_config(std::vector<std::string>& config_output) {
 			if (it->second.value != it->second.default_value)
 				configline.append(utils::strprintf(" # default: %s", it->second.default_value.c_str()));
 			break;
+		case configdata::ENUM:
 		case configdata::STR:
 		case configdata::PATH:
 			if (it->second.multi_option) {
@@ -224,6 +267,9 @@ void configcontainer::dump_config(std::vector<std::string>& config_output) {
 				}
 			}
 			break;
+		case configdata::ALIAS:
+			// skip entry, generate no output
+			continue;
 		case configdata::INVALID:
 			assert(0);
 			break;

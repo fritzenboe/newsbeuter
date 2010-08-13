@@ -1,4 +1,4 @@
-/* rsspp - Copyright (C) 2008-2009 Andreas Krennmair <ak@newsbeuter.org>
+/* rsspp - Copyright (C) 2008-2010 Andreas Krennmair <ak@newsbeuter.org>
  * Licensed under the MIT/X Consortium License. See file LICENSE
  * for more information.
  */
@@ -13,6 +13,7 @@
 #include <utils.h>
 #include <cstring>
 #include <utils.h>
+#include <remote_api.h>
 
 using namespace newsbeuter;
 
@@ -59,7 +60,7 @@ static size_t handle_headers(void * ptr, size_t size, size_t nmemb, void * data)
 	return size * nmemb;
 }
 
-feed parser::parse_url(const std::string& url, time_t lastmodified, const std::string& etag) {
+feed parser::parse_url(const std::string& url, time_t lastmodified, const std::string& etag, newsbeuter::remote_api * api) {
 	std::string buf;
 	CURLcode ret;
 
@@ -70,6 +71,9 @@ feed parser::parse_url(const std::string& url, time_t lastmodified, const std::s
 
 	if (ua) {
 		curl_easy_setopt(easyhandle, CURLOPT_USERAGENT, ua);
+	}
+	if (api) {
+		api->configure_handle(easyhandle);
 	}
 	curl_easy_setopt(easyhandle, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(easyhandle, CURLOPT_SSL_VERIFYPEER, 0);
@@ -86,8 +90,10 @@ feed parser::parse_url(const std::string& url, time_t lastmodified, const std::s
 	if (prx)
 		curl_easy_setopt(easyhandle, CURLOPT_PROXY, prx);
 
-	if (prxauth)
+	if (prxauth) {
+		curl_easy_setopt(easyhandle, CURLOPT_PROXYAUTH, CURLAUTH_ANY);
 		curl_easy_setopt(easyhandle, CURLOPT_PROXYUSERPWD, prxauth);
+	}
 
 	curl_easy_setopt(easyhandle, CURLOPT_PROXYTYPE, prxtype);
 
@@ -214,7 +220,18 @@ feed parser::parse_xmlnode(xmlNode* node) {
 					} else if (strcmp((const char *)node->ns->href, ATOM_1_0_URI)==0) {
 						f.rss_version = ATOM_1_0;
 					} else {
-						throw exception(_("invalid Atom version"));
+						const char * version = (const char *)xmlGetProp(node, (const xmlChar *)"version");
+						if (!version) {
+							xmlFree((void *)version);
+							throw exception(_("invalid Atom version"));
+						}
+						if (strcmp(version, "0.3")==0) {
+							xmlFree((void *)version);
+							f.rss_version = ATOM_0_3_NONS;
+						} else {
+							xmlFree((void *)version);
+							throw exception(_("invalid Atom version"));
+						}
 					}
 				} else {
 					throw exception(_("no Atom version"));

@@ -369,17 +369,21 @@ void view::update_visible_feeds(std::vector<std::tr1::shared_ptr<rss_feed> > fee
 }
 
 void view::set_feedlist(std::vector<std::tr1::shared_ptr<rss_feed> > feeds) {
-	scope_mutex lock(mtx);
+	try {
+		scope_mutex lock(mtx);
 
-	for (std::vector<std::tr1::shared_ptr<rss_feed> >::iterator it=feeds.begin();it!=feeds.end();++it) {
-		if ((*it)->rssurl().substr(0,6) != "query:") {
-			(*it)->set_feedptrs(*it);
+		for (std::vector<std::tr1::shared_ptr<rss_feed> >::iterator it=feeds.begin();it!=feeds.end();++it) {
+			if ((*it)->rssurl().substr(0,6) != "query:") {
+				(*it)->set_feedptrs(*it);
+			}
 		}
-	}
 
-	if (formaction_stack_size() > 0) {
-		std::tr1::shared_ptr<feedlist_formaction> feedlist = std::tr1::dynamic_pointer_cast<feedlist_formaction, formaction>(formaction_stack[0]);
-		feedlist->set_feedlist(feeds);
+		if (formaction_stack_size() > 0) {
+			std::tr1::shared_ptr<feedlist_formaction> feedlist = std::tr1::dynamic_pointer_cast<feedlist_formaction, formaction>(formaction_stack[0]);
+			feedlist->set_feedlist(feeds);
+		}
+	} catch (const matcherexception& e) {
+		set_status(utils::strprintf(_("Error: applying the filter failed: %s"), e.what()));
 	}
 }
 
@@ -770,6 +774,8 @@ void view::apply_colors(std::tr1::shared_ptr<formaction> fa) {
 	std::map<std::string,std::vector<std::string> >::const_iterator attit = attributes.begin();
 	LOG(LOG_DEBUG, "view::apply_colors: fa = %s", fa->id().c_str());
 
+	std::string article_colorstr;
+
 	for (;fgcit != fg_colors.end(); ++fgcit, ++bgcit, ++attit) {
 		std::string colorattr;
 		if (fgcit->second != "default") {
@@ -788,6 +794,22 @@ void view::apply_colors(std::tr1::shared_ptr<formaction> fa) {
 			colorattr.append("attr=");
 			colorattr.append(*it);
 		} 
+
+		if (fgcit->first == "article") {
+			article_colorstr = colorattr;
+			if (fa->id() == "article") {
+				std::string bold = article_colorstr;
+				std::string ul = article_colorstr;
+				if (bold.length() > 0)
+					bold.append(",");
+				if (ul.length() > 0)
+					ul.append(",");
+				bold.append("attr=bold");
+				ul.append("attr=underline");
+				fa->get_form()->set("color_bold", bold.c_str());
+				fa->get_form()->set("color_underline", ul.c_str());
+			}
+		}
 
 		LOG(LOG_DEBUG,"view::apply_colors: %s %s %s\n", fa->id().c_str(), fgcit->first.c_str(), colorattr.c_str());
 

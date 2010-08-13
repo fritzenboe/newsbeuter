@@ -11,12 +11,14 @@ CXX=c++
 # compiler and linker flags
 DEFINES=-DLOCALEDIR=\"$(localedir)\"
 WARNFLAGS=-Wall -Wextra
-CXXFLAGS+=-ggdb -I/sw/include -Iinclude -Istfl -Ifilter -I. -Irss $(WARNFLAGS) $(DEFINES)
-LDFLAGS+=-L. -L/sw/lib
+CXXFLAGS+=-ggdb -Iinclude -Istfl -Ifilter -I. -Irss $(WARNFLAGS) $(DEFINES)
+LDFLAGS+=-L.
 
 PACKAGE=newsbeuter
 
+ifneq (distclean, $(MAKECMDGOALS))
 include config.mk
+endif
 
 LIB_SOURCES:=$(shell cat libbeuter.deps)
 LIB_OBJS:=$(patsubst %.cpp,%.o,$(LIB_SOURCES))
@@ -181,10 +183,10 @@ install-mo:
 	done
 
 test: $(LIB_OUTPUT) $(NEWSBEUTER_OBJS) test/test.o
-	$(CXX) $(CXXFLAGS) -o test/test src/history.o src/rss.o src/rss_parser.o src/htmlrenderer.o src/cache.o src/tagsouppullparser.o src/urlreader.o src/regexmanager.o test/test.o $(NEWSBEUTER_LIBS) -lboost_unit_test_framework $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o test/test src/history.o src/rss.o src/rss_parser.o src/htmlrenderer.o src/cache.o src/tagsouppullparser.o src/urlreader.o src/regexmanager.o test/test.o $(NEWSBEUTER_LIBS) $(LDFLAGS)
 
 test-rss: $(RSSPPLIB_OUTPUT) test/test-rss.o
-	$(CXX) $(CXXFLAGS) -o test/test-rss test/test-rss.o src/utils.o $(NEWSBEUTER_LIBS) -lboost_unit_test_framework $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o test/test-rss test/test-rss.o src/utils.o $(NEWSBEUTER_LIBS) $(LDFLAGS)
 
 test/test.o: test/test.cpp
 	$(CXX) $(CXXFLAGS) -o $@ -c $<

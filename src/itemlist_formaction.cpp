@@ -29,6 +29,7 @@ itemlist_formaction::~itemlist_formaction() { }
 
 void itemlist_formaction::process_operation(operation op, bool automatic, std::vector<std::string> * args) {
 	bool quit = false;
+	bool hardquit = false;
 
 	/*
 	 * most of the operations go like this:
@@ -42,8 +43,9 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 	switch (op) {
 		case OP_OPEN: {
 				LOG(LOG_INFO, "itemlist_formaction: opening item at pos `%s'", itemposname.c_str());
-				if (itemposname.length() > 0) {
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
 					visible_items[itempos].first->set_unread(false); // set article as read
+					v->get_ctrl()->mark_article_read(visible_items[itempos].first->guid(), true);
 					old_itempos = itempos;
 					v->push_itemview(feed, visible_items[itempos].first->guid(), show_searchresult ? searchphrase : "");
 					do_redraw = true;
@@ -54,7 +56,11 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 			break;
 		case OP_DELETE: {
 				scope_measure m1("OP_DELETE");
-				if (itemposname.length() > 0) {
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
+					// mark as read
+					v->get_ctrl()->mark_article_read(visible_items[itempos].first->guid(), true);
+					visible_items[itempos].first->set_unread(false);
+					// mark as deleted
 					visible_items[itempos].first->set_deleted(!visible_items[itempos].first->deleted());
 					v->get_ctrl()->mark_deleted(visible_items[itempos].first->guid(), visible_items[itempos].first->deleted());
 					if (itempos < visible_items.size()-1)
@@ -72,9 +78,25 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 				do_redraw = true;
 			}
 			break;
+		case OP_OPENBROWSER_AND_MARK: {
+				LOG(LOG_INFO, "itemlist_formaction: opening item at pos `%s'", itemposname.c_str());
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
+					if (itempos < visible_items.size()) {
+						visible_items[itempos].first->set_unread(false);
+						if (itempos < visible_items.size()-1) {
+							f->set("itempos", utils::strprintf("%u", itempos + 1));
+						}
+						v->open_in_browser(visible_items[itempos].first->link());
+						do_redraw = true;
+					}
+				} else {
+					v->show_error(_("No item selected!")); // should not happen
+				}
+			}
+			break;
 		case OP_OPENINBROWSER: {
 				LOG(LOG_INFO, "itemlist_formaction: opening item at pos `%s'", itemposname.c_str());
-				if (itemposname.length() > 0) {
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
 					if (itempos < visible_items.size()) {
 						try {
 								visible_items[itempos].first->set_unread(false);
@@ -89,13 +111,39 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 				}
 			}
 			break;
+		case OP_TOGGLEITEMREAD: {
+				LOG(LOG_INFO, "itemlist_formaction: toggling item read at pos `%s'", itemposname.c_str());
+				if (itemposname.length() > 0) {
+					v->set_status(_("Toggling read flag for article..."));
+					try {
+						if (automatic && args->size() > 0) {
+							if ((*args)[0] == "read") {
+								visible_items[itempos].first->set_unread(false);
+							} else if ((*args)[0] == "unread") {
+								visible_items[itempos].first->set_unread(true);
+							}
+							v->set_status("");
+						} else {
+							visible_items[itempos].first->set_unread(!visible_items[itempos].first->unread());
+							v->set_status("");
+						}
+					} catch (const dbexception& e) {
+						v->set_status(utils::strprintf(_("Error while toggling read flag: %s"), e.what()));
+					}
+					if (itempos < visible_items.size()-1)
+						f->set("itempos", utils::strprintf("%u", itempos + 1));
+					do_redraw = true;
+				}
+			}
+			break;
 		case OP_SHOWURLS:
-			if (itemposname.length() > 0) {
+			if (itemposname.length() > 0 && visible_items.size() != 0) {
 				if (itempos < visible_items.size()) {
 					std::vector<linkpair> links;
 					std::vector<std::string> lines;
 					htmlrenderer rnd(80);
-					rnd.render(visible_items[itempos].first->description(), lines, links, visible_items[itempos].first->link());
+					std::string baseurl = visible_items[itempos].first->get_base() != "" ? visible_items[itempos].first->get_base() : visible_items[itempos].first->link();
+					rnd.render(visible_items[itempos].first->description(), lines, links, baseurl);
 					if (links.size() > 0) {
 						v->push_urlview(links);
 					} else {
@@ -108,7 +156,7 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 			break;
 		case OP_BOOKMARK: {
 				LOG(LOG_INFO, "itemlist_formaction: bookmarking item at pos `%s'", itemposname.c_str());
-				if (itemposname.length() > 0) {
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
 					if (itempos < visible_items.size()) {
 						if (automatic) {
 							qna_responses.clear();
@@ -126,7 +174,7 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 			}
 			break;
 		case OP_EDITFLAGS: {
-				if (itemposname.length() > 0) {
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
 					if (itempos < visible_items.size()) {
 						if (automatic) {
 							if (args->size() > 0) {
@@ -148,7 +196,7 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 		case OP_SAVE: 
 			{
 				LOG(LOG_INFO, "itemlist_formaction: saving item at pos `%s'", itemposname.c_str());
-				if (itemposname.length() > 0) {
+				if (itemposname.length() > 0 && visible_items.size() != 0) {
 					std::string filename ;
 					if (automatic) {
 						if (args->size() > 0) {
@@ -181,6 +229,12 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 			v->feedlist_mark_pos_if_visible(pos);
 			feed->purge_deleted_items();
 			quit = true;
+			break;
+		case OP_HARDQUIT:
+			LOG(LOG_INFO, "itemlist_formaction: hard quitting");
+			v->feedlist_mark_pos_if_visible(pos);
+			feed->purge_deleted_items();
+			hardquit = true;
 			break;
 		case OP_NEXTUNREAD:
 			LOG(LOG_INFO, "itemlist_formaction: jumping to next unread item");
@@ -251,7 +305,8 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 			update_visible_items = true;
 			do_redraw = true;
 			break;
-		case OP_PIPE_TO: {
+		case OP_PIPE_TO:
+			if(visible_items.size() != 0) {
 				std::vector<qna_pair> qna;
 				if (automatic) {
 					if (args->size() > 0) {
@@ -263,6 +318,8 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 					qna.push_back(qna_pair(_("Pipe article to command: "), ""));
 					this->start_qna(qna, OP_PIPE_TO, &cmdlinehistory);
 				}
+			} else {
+				v->show_error(_("No item selected!"));
 			}
 			break;
 		case OP_SEARCH: {
@@ -276,31 +333,6 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 				} else {
 					qna.push_back(qna_pair(_("Search for: "), ""));
 					this->start_qna(qna, OP_INT_START_SEARCH, &searchhistory);
-				}
-			}
-			break;
-		case OP_TOGGLEITEMREAD: {
-				LOG(LOG_INFO, "itemlist_formaction: toggling item read at pos `%s'", itemposname.c_str());
-				if (itemposname.length() > 0) {
-					v->set_status(_("Toggling read flag for article..."));
-					try {
-						if (automatic && args->size() > 0) {
-							if ((*args)[0] == "read") {
-								visible_items[itempos].first->set_unread(false);
-							} else if ((*args)[0] == "unread") {
-								visible_items[itempos].first->set_unread(true);
-							}
-							v->set_status("");
-						} else {
-							visible_items[itempos].first->set_unread(!visible_items[itempos].first->unread());
-							v->set_status("");
-						}
-					} catch (const dbexception& e) {
-						v->set_status(utils::strprintf(_("Error while toggling read flag: %s"), e.what()));
-					}
-					if (itempos < visible_items.size()-1)
-						f->set("itempos", utils::strprintf("%u", itempos + 1));
-					do_redraw = true;
 				}
 			}
 			break;
@@ -396,7 +428,11 @@ void itemlist_formaction::process_operation(operation op, bool automatic, std::v
 		default:
 			break;
 	}
-	if (quit) {
+	if (hardquit) {
+		while (v->formaction_stack_size() > 0) {
+			v->pop_current_formaction();
+		}
+	} else if (quit) {
 		v->pop_current_formaction();
 	}
 }
@@ -472,7 +508,7 @@ void itemlist_formaction::qna_end_editflags() {
 	posname >> itempos;
 	if (itempos < visible_items.size()) {
 		visible_items[itempos].first->set_flags(qna_responses[0]);
-		visible_items[itempos].first->update_flags();
+		v->get_ctrl()->update_flags(visible_items[itempos].first);
 		v->set_status(_("Flags updated."));
 		LOG(LOG_DEBUG, "itemlist_formaction::finished_qna: updated flags");
 		do_redraw = true;
@@ -564,6 +600,7 @@ void itemlist_formaction::prepare() {
 			unsigned int itempos = utils::to_u(itemposname);
 			if (visible_items[itempos].first->unread()) {
 				visible_items[itempos].first->set_unread(false);
+				v->get_ctrl()->mark_article_read(visible_items[itempos].first->guid(), true);
 				do_redraw = true;
 			}
 		}
@@ -585,20 +622,29 @@ void itemlist_formaction::prepare() {
 	std::string datetimeformat = v->get_cfg()->get_configvalue("datetime-format");
 	std::string itemlist_format = v->get_cfg()->get_configvalue("articlelist-format");
 
+
 	for (std::vector<itemptr_pos_pair>::iterator it = visible_items.begin(); it != visible_items.end(); ++it) {
+		std::string tmp_itemlist_format = itemlist_format;
 		fmtstr_formatter fmt;
 
 		fmt.register_fmt('i', utils::strprintf("%u",it->second + 1));
 		fmt.register_fmt('f', gen_flags(it->first));
 		fmt.register_fmt('D', gen_datestr(it->first->pubDate_timestamp(), datetimeformat.c_str()));
 		if (feed->rssurl() != it->first->feedurl() && it->first->get_feedptr() != NULL) {
-			fmt.register_fmt('T', it->first->get_feedptr()->title());
+			fmt.register_fmt('T', utils::replace_all(it->first->get_feedptr()->title(), "<", "<>"));
 		}
-		fmt.register_fmt('t', it->first->title());
-		fmt.register_fmt('a', it->first->author());
+		fmt.register_fmt('t', utils::replace_all(it->first->title(), "<", "<>"));
+		fmt.register_fmt('a', utils::replace_all(it->first->author(), "<", "<>"));
 		fmt.register_fmt('L', it->first->length());
 
-		listfmt.add_line(fmt.do_format(itemlist_format, width), it->second);
+		if (rxman) {
+			int id;
+			if ((id = rxman->article_matches(it->first.get())) != -1) {
+				tmp_itemlist_format = utils::strprintf("<%d>%s</>", id, itemlist_format.c_str());
+			}
+		}
+
+		listfmt.add_line(fmt.do_format(tmp_itemlist_format, width), it->second);
 	}
 
 	f->modify("items","replace_inner", listfmt.format_list(rxman, "articlelist"));

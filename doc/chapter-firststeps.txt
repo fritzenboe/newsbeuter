@@ -3,7 +3,7 @@ After you've installed newsbeuter, you can run it for the first time by typing
 
 	Error: no URLs configured. Please fill the file /home/ak/.newsbeuter/urls with RSS feed URLs or import an OPML file.
 
-	newsbeuter 2.1
+	newsbeuter 2.4
 	usage: ./newsbeuter [-i <file>|-e] [-u <urlfile>] [-c <cachefile>] [-x <command> ...] [-h]
 			-e              export OPML feed to stdout
 			-r              refresh feeds on start
@@ -14,6 +14,7 @@ After you've installed newsbeuter, you can run it for the first time by typing
 			-X              clean up cache thoroughly
 			-x <command>... execute list of commands
 			-o              activate offline mode (only applies to bloglines synchronization mode)
+			-q              quiet startup
 			-v              get version information
 			-l <loglevel>   write a log with a certain loglevel (valid values: 1 to 6)
 			-d <logfile>    use <logfile> as output log file
@@ -38,7 +39,9 @@ provide the username/password in the following way:
 In order to protect username and password, make sure that
 $HOME/.newsbeuter/urls has the appropriate permissions. Newsbeuter also makes
 sure that usernames and passwords within URLs aren't displayed in its user
-interface.
+interface. In case there is a '@' in the username, you need to write it as 
+'%40' instead so that it can be distinguished from the '@' that separates the 
+username/password part from the hostname part.
 
 You can also configure local files as feeds, by prefixing the local path with
 "file://" and adding it to the $HOME/.newsbeuter/urls file:

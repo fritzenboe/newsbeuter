@@ -14,11 +14,12 @@
 #include <cerrno>
 #include <cstring>
 #include <sstream>
+#include <algorithm>
 
 namespace newsbeuter {
 
-rss_parser::rss_parser(const char * uri, cache * c, configcontainer * cfg, rss_ignores * ii) 
-	: my_uri(uri), ch(c), cfgcont(cfg), skip_parsing(false), is_valid(false), ign(ii) { }
+rss_parser::rss_parser(const std::string& uri, cache * c, configcontainer * cfg, rss_ignores * ii, remote_api * a) 
+	: my_uri(uri), ch(c), cfgcont(cfg), skip_parsing(false), is_valid(false), ign(ii), api(a) { }
 
 rss_parser::~rss_parser() { }
 
@@ -163,7 +164,7 @@ void rss_parser::download_http(const std::string& uri) {
 			if (!ign || !ign->matches_lastmodified(uri)) {
 				ch->fetch_lastmodified(uri, lm, etag);
 			}
-			f = p.parse_url(uri, lm, etag);
+			f = p.parse_url(uri, lm, etag, api);
 			if (p.get_last_modified() != 0 || p.get_etag().length() > 0) {
 				LOG(LOG_DEBUG, "rss_parser::download_http: lastmodified old: %d new: %d", lm, p.get_last_modified());
 				LOG(LOG_DEBUG, "rss_parser::download_http: etag old: %s new %s", etag.c_str(), p.get_etag().c_str());
@@ -265,6 +266,24 @@ void rss_parser::fill_feed_items(std::tr1::shared_ptr<rss_feed> feed) {
 
 		x->set_feedurl(feed->rssurl());
 
+		if (f.rss_version == rsspp::ATOM_1_0 && item->labels.size() > 0) {
+			std::vector<std::string>::const_iterator start, finish;
+			start = item->labels.begin();
+			finish = item->labels.end();
+			if (std::find(start, finish, "fresh") != finish) {
+				x->set_unread_nowrite(true);
+				x->set_override_unread(true);
+			} 
+			if (std::find(start, finish, "kept-unread") != finish) {
+				x->set_unread_nowrite(true);
+				x->set_override_unread(true);
+			}
+			if (std::find(start, finish, "read") != finish) {
+				x->set_unread_nowrite(false);
+				x->set_override_unread(true);
+			}
+		}
+
 		set_item_content(x, *item);
 
 		if (item->pubDate != "") 
@@ -273,6 +292,8 @@ void rss_parser::fill_feed_items(std::tr1::shared_ptr<rss_feed> feed) {
 			x->set_pubDate(::time(NULL));
 			
 		x->set_guid(get_guid(*item));
+
+		x->set_base(item->base);
 
 		set_item_enclosure(x, *item);
 

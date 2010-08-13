@@ -14,6 +14,8 @@
 namespace newsbeuter {
 
 	typedef std::pair<std::string, matcher *> feedurl_expr_pair;
+
+	enum dl_status { SUCCESS, TO_BE_DOWNLOADED, DURING_DOWNLOAD, DL_ERROR };
 	
 	class cache;
 	class rss_feed;
@@ -71,7 +73,8 @@ namespace newsbeuter {
 			inline void set_enqueued(bool v) { enqueued_ = v; }
 
 			inline const std::string& flags() const { return flags_; }
-			void set_flags(const std::string& ff) { flags_ = ff; sort_flags(); }
+			inline const std::string& oldflags() const { return oldflags_; }
+			void set_flags(const std::string& ff);
 			void update_flags();
 			void sort_flags();
 
@@ -87,6 +90,12 @@ namespace newsbeuter {
 			inline void set_index(unsigned int i) { idx = i; }
 			inline unsigned int get_index() { return idx; }
 
+			inline void set_base(const std::string& b) { base = b; }
+			inline const std::string& get_base() { return base; }
+
+			inline void set_override_unread(bool b) { override_unread_ = b; }
+			inline bool override_unread() { return override_unread_; }
+
 		private:
 			std::string title_;
 			std::string link_;
@@ -101,9 +110,12 @@ namespace newsbeuter {
 			std::string enclosure_type_;
 			bool enqueued_;
 			std::string flags_;
+			std::string oldflags_;
 			std::tr1::shared_ptr<rss_feed> feedptr;
 			bool deleted_;
 			unsigned int idx;
+			std::string base;
+			bool override_unread_;
 	};
 
 	class rss_feed : public matchable {
@@ -143,7 +155,7 @@ namespace newsbeuter {
 			virtual bool has_attribute(const std::string& attribname);
 			virtual std::string get_attribute(const std::string& attribname);
 
-			void update_items(std::vector<std::tr1::shared_ptr<rss_feed> >& feeds);
+			void update_items(std::vector<std::tr1::shared_ptr<rss_feed> > feeds);
 
 			inline void set_query(const std::string& s) { query = s; }
 
@@ -168,6 +180,11 @@ namespace newsbeuter {
 
 			void set_feedptrs(std::tr1::shared_ptr<rss_feed> self);
 
+			std::string get_status();
+
+			inline void reset_status() { status_ = TO_BE_DOWNLOADED; }
+			inline void set_status(dl_status st) { status_ = st; }
+
 			mutex item_mutex; // this is ugly, but makes it possible to lock items use e.g. from the cache class
 		private:
 			std::string title_;
@@ -185,6 +202,7 @@ namespace newsbeuter {
 			bool is_rtl_;
 			unsigned int idx;
 			unsigned int order;
+			dl_status status_;
 	};
 
 	class rss_ignores : public config_action_handler {

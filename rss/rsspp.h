@@ -1,4 +1,4 @@
-/* rsspp - Copyright (C) 2008-2009 Andreas Krennmair <ak@newsbeuter.org>
+/* rsspp - Copyright (C) 2008-2010 Andreas Krennmair <ak@newsbeuter.org>
  * Licensed under the MIT/X Consortium License. See file LICENSE
  * for more information.
  */
@@ -11,10 +11,11 @@
 #include <exception>
 #include <libxml/parser.h>
 #include <curl/curl.h>
+#include <remote_api.h>
 
 namespace rsspp {
 
-enum version { UNKNOWN = 0, RSS_0_91, RSS_0_92, RSS_1_0, RSS_2_0, ATOM_0_3, ATOM_1_0, RSS_0_94 };
+enum version { UNKNOWN = 0, RSS_0_91, RSS_0_92, RSS_1_0, RSS_2_0, ATOM_0_3, ATOM_1_0, RSS_0_94, ATOM_0_3_NONS };
 
 struct item {
 	std::string title;
@@ -36,6 +37,10 @@ struct item {
 	// extensions:
 	std::string content_encoded;
 	std::string itunes_summary;
+
+	// Atom-specific:
+	std::string base;
+	std::vector<std::string> labels;
 };
 
 struct feed {
@@ -67,7 +72,7 @@ class parser {
 	public:
 		parser(unsigned int timeout = 30, const char * user_agent = 0, const char * proxy = 0, const char * proxy_auth = 0, curl_proxytype proxy_type = CURLPROXY_HTTP);
 		~parser();
-		feed parse_url(const std::string& url, time_t lastmodified = 0, const std::string& etag = "");
+		feed parse_url(const std::string& url, time_t lastmodified = 0, const std::string& etag = "", newsbeuter::remote_api * api = 0);
 		feed parse_buffer(const char * buffer, size_t size, const char * url = NULL);
 		feed parse_file(const std::string& filename);
 		time_t get_last_modified() { return lm; }

@@ -7,6 +7,7 @@
 #include <logger.h>
 #include <curl/curl.h>
 #include <configcontainer.h>
+#include <libxml/parser.h>
 
 namespace newsbeuter {
 
@@ -36,6 +37,8 @@ class utils {
 		static std::wstring str2wstr(const std::string& str);
 		static std::string wstr2str(const std::wstring& wstr);
 
+		static std::wstring clean_nonprintable_characters(std::wstring text);
+
 		static std::wstring utf8str2wstr(const std::string& utf8str);
 
 		static std::string to_s(unsigned int u);
@@ -47,6 +50,8 @@ class utils {
 		static std::string get_useragent(configcontainer * cfgcont);
 
 		static size_t strwidth(const std::string& s);
+		static size_t strwidth_stfl(const std::string& str);
+		static size_t wcswidth_stfl(const std::wstring& str, size_t size);
 
 		static inline unsigned int max(unsigned int a, unsigned int b) { return (a > b) ? a : b; }
 
@@ -76,10 +81,17 @@ class utils {
 		static void set_common_curl_options(CURL * handle, configcontainer * cfg);
 
 		static curl_proxytype get_proxy_type(const std::string& type);
+		static int get_proxy_auth_method(const std::string& type);
 
 		static bool is_special_url(const std::string& url);
 
 		static bool is_http_url(const std::string& url);
+
+		static std::string get_content(xmlNode * node);
+		static std::string get_prop(xmlNode * node, const char * prop, const char * ns = NULL);
+
+		static std::string escape_url(const std::string& url);
+		static std::string unescape_url(const std::string& url);
 
 	private:
 		static void append_escapes(std::string& str, char c);
